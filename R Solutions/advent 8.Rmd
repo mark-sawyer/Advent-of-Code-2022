@@ -1,0 +1,196 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r first}
+
+# Part 1 functions ----
+f_get_right <- function(row, col) {
+  tree_mat[row, (col + 1L):row_length]
+}
+
+f_get_left <- function(row, col) {
+  tree_mat[row, 1:(col - 1L)]
+}
+
+f_get_up <- function(row, col) {
+  tree_mat[1:(row - 1L), col]
+}
+
+f_get_down <- function(row, col) {
+  tree_mat[(row + 1L):col_length, col]
+}
+
+f_is_visible <- function(row, col) {
+  if (row %in% c(1, row_length) | col %in% c(1, col_length)) return(TRUE)
+  
+  height <- tree_mat[row, col]
+  if (mean(height > f_get_right(row, col)) == 1) return(TRUE)
+  else if (mean(height > f_get_left(row, col)) == 1) return(TRUE)
+  else if (mean(height > f_get_up(row, col)) == 1) return(TRUE)
+  else if (mean(height > f_get_down(row, col)) == 1) return(TRUE)
+  else return(FALSE)
+}
+
+f_get_logical_matrix <- function() {
+  mat <- matrix(nrow=row_length, ncol=col_length)
+  for (row in 1:row_length) {
+    for (col in 1:col_length) {
+      mat[row, col] <- f_is_visible(row, col)
+    }
+  }
+  mat
+}
+
+# Part 2 functions ----
+f_get_right_vd <- function(row, col, height) {
+  trees <- tree_mat[row, (col + 1L):row_length]
+  f_calc_viewing_distance(trees, height)
+}
+
+f_get_left_vd <- function(row, col, height) {
+  trees <- tree_mat[row, (col - 1L):1]
+  f_calc_viewing_distance(trees, height)
+}
+
+f_get_up_vd <- function(row, col, height) {
+  trees <- tree_mat[(row - 1L):1, col]
+  f_calc_viewing_distance(trees, height)
+}
+
+f_get_down_vd <- function(row, col, height) {
+  trees <- tree_mat[(row + 1L):col_length, col]
+  f_calc_viewing_distance(trees, height)
+}
+
+f_calc_viewing_distance <- function(trees, height) {
+  blockers <- which(height <= trees)
+  if (length(blockers) == 0) return(length(trees))  # It can see to the edge
+  else return(min(blockers))
+}
+
+f_get_scenic_score <- function(row, col) {
+  if (row %in% c(1, row_length) | col %in% c(1, col_length)) return(0)
+  
+  height <- tree_mat[row, col]
+  vd1 <- f_get_right_vd(row, col, height)
+  vd2 <- f_get_left_vd(row, col, height)
+  vd3 <- f_get_up_vd(row, col, height)
+  vd4 <- f_get_down_vd(row, col, height)
+  return(vd1 * vd2 * vd3 * vd4)
+}
+
+f_get_scenic_scores <- function() {
+  mat <- matrix(nrow=row_length, ncol=col_length)
+  for (row in 1:row_length) {
+    for (col in 1:col_length) {
+      mat[row, col] <- f_get_scenic_score(row, col)
+    }
+  }
+  mat
+}
+
+# Main ----
+
+input <- readLines("advent 8.txt")
+row_length <- input[1] %>% str_length()
+col_length <- length(input)
+  
+tree_mat <- readLines("advent 8.txt") %>%
+  as_tibble() %>%
+  separate(value, into=as.character(0:row_length), sep="") %>%
+  select(-`0`) %>%
+  mutate(across(everything(), as.integer)) %>%
+  as.matrix()
+
+f_get_logical_matrix() %>% sum()
+f_get_scenic_scores() %>% max()
+
+```
+```{r refactor}
+
+f_get_right <- function(mat, row, col, col_length) {
+  mat[row, (col + 1L):col_length]
+}
+
+f_get_left <- function(mat, row, col) {
+  mat[row, (col - 1L):1]
+}
+
+f_get_up <- function(mat, row, col) {
+  mat[(row - 1L):1, col]
+}
+
+f_get_down <- function(mat, row, col, row_length) {
+  mat[(row + 1L):row_length, col]
+}
+
+f_is_visible <- function(mat, row, col, row_length, col_length) {
+  if (row %in% c(1, row_length) | col %in% c(1, col_length)) return(TRUE)
+  
+  height <- mat[row, col]
+  if (mean(height > f_get_right(mat, row, col, row_length)) == 1) return(TRUE)
+  else if (mean(height > f_get_left(mat, row, col)) == 1) return(TRUE)
+  else if (mean(height > f_get_up(mat, row, col)) == 1) return(TRUE)
+  else if (mean(height > f_get_down(mat, row, col, col_length)) == 1) return(TRUE)
+  else return(FALSE)
+}
+
+f_get_new_matrix <- function(mat, new_val_func) {
+  row_length <- nrow(mat)
+  col_length <- ncol(mat)
+  new_mat <- matrix(nrow=row_length, ncol=col_length)
+  for (row in 1:row_length) {
+    for (col in 1:col_length) {
+      new_mat[row, col] <- new_val_func(mat, row, col, row_length, col_length)
+    }
+  }
+  new_mat
+}
+
+f_calc_viewing_distance <- function(trees, height) {
+  blockers <- which(height <= trees)
+  if (length(blockers) == 0) return(length(trees))  # It can see to the edge
+  else return(min(blockers))
+}
+
+f_get_scenic_score <- function(mat, row, col, row_length, col_length) {
+  if (row %in% c(1, row_length) | col %in% c(1, col_length)) return(0)
+  
+  height <- mat[row, col]
+  vd1 <- f_get_right(mat, row, col, col_length) %>% f_calc_viewing_distance(height)
+  vd2 <- f_get_left(mat, row, col) %>% f_calc_viewing_distance(height)
+  vd3 <- f_get_up(mat, row, col) %>% f_calc_viewing_distance(height)
+  vd4 <- f_get_down(mat, row, col, row_length) %>% f_calc_viewing_distance(height)
+  return(vd1 * vd2 * vd3 * vd4)
+}
+
+input <- readLines("advent 8.txt")
+tree_mat <- readLines("advent 8.txt") %>%
+  as_tibble() %>%
+  separate(value, into=as.character(0:str_length(input[1])), sep="") %>%
+  select(-`0`) %>%
+  mutate(across(everything(), as.integer)) %>%
+  as.matrix()
+
+f_get_new_matrix(tree_mat, f_is_visible) %>% sum()
+f_get_new_matrix(tree_mat, f_get_scenic_score) %>% max()
+
+```

@@ -1,0 +1,92 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("C:/Documents/R Files/Advent of Code")
+source("C:/Documents/R Files/Setup.R")
+
+```
+
+```{r}
+
+# Setup ----
+input <- readLines("Inputs/advent 20.txt")
+
+encryption <- input %>%
+  as_tibble() %>%
+  mutate(
+    value=as.integer(value),
+    rn=row_number()
+  )
+
+# Functions ----
+my_mod <- function(x, n) {
+  a <- x %% n
+  ifelse(a == 0L, n, a)
+}
+
+rearrange <- function(value_moved, new_index, removed, len) {
+  new <- rep(NA_integer_, len)
+  new[ceiling(new_index)] <- value_moved
+  if (floor(new_index) > 0) new[1:floor(new_index)] <- removed[1:floor(new_index)]
+  new[(ceiling(new_index) + 1):len] <- removed[ceiling(new_index):length(removed)]
+  new
+}
+
+update_tibble <- function(d, num) {
+  movement <- d %>% summarise(value[which(rn == num)]) %>% deframe()
+  current_index <- d %>% mutate(current_rn=row_number()) %>% summarise(current_rn[which(rn == num)]) %>% deframe()
+  removed <- d %>% pull(value) %>% { .[-current_index] }
+  removed_rn <- d %>% pull(rn) %>% { .[-current_index] }
+  current_index <- current_index - 0.5
+  new_index <- (current_index + movement) %% length(removed)
+  
+  d %>%
+    mutate(
+      value=rearrange(movement, new_index, removed, n()),
+      rn=rearrange(num, new_index, removed_rn, n()),
+    )
+}
+
+# Part 1 ----
+temp <- encryption
+for (i in 1:nrow(encryption)) {
+  temp <- update_tibble(temp, i)
+}
+
+temp %>%
+  summarise(
+    zero_index=which(value == 0L),
+    one_thousand=value[my_mod(zero_index + 1000L, n())],
+    two_thousand=value[my_mod(zero_index + 2000L, n())],
+    three_thousand=value[my_mod(zero_index + 3000L, n())],
+    sum=one_thousand + two_thousand + three_thousand
+  )
+
+# Part 2 ----
+decryption_key <- 811589153
+
+temp <- encryption %>%
+  mutate(value=value * decryption_key)
+  
+for (mix in 1:10) {
+  for (i in 1:nrow(encryption)) {
+    temp <- update_tibble(temp, i)
+  }
+}
+
+temp %>%
+  summarise(
+    zero_index=which(value == 0L),
+    one_thousand=value[my_mod(zero_index + 1000L, n())],
+    two_thousand=value[my_mod(zero_index + 2000L, n())],
+    three_thousand=value[my_mod(zero_index + 3000L, n())],
+    sum=one_thousand + two_thousand + three_thousand
+  )
+
+```

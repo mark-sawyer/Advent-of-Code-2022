@@ -1,0 +1,172 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r part 1}
+
+f_follow_instruction <- function(l) {
+  f_move_head(l)
+  f_move_tail()
+}
+
+f_move_head <- function(l) {
+  if (l == "U") head_row <<- head_row - 1L
+  else if (l == "D") head_row <<- head_row + 1L
+  else if (l == "L") head_col <<- head_col - 1L
+  else if (l == "R") head_col <<- head_col + 1L
+}
+
+f_move_tail <- function() {
+  if (abs(head_row - tail_row) <= 1 & abs(head_col - tail_col) <= 1) return()
+  
+  if (head_row == tail_row) f_move_tail_col() else
+  if (head_col == tail_col) f_move_tail_row() else 
+  {
+    tail_row <<- tail_row + as.integer(sign(head_row - tail_row))
+    tail_col <<- tail_col + as.integer(sign(head_col - tail_col))
+  }
+}
+
+f_move_tail_col <- function() {
+  if (sign(head_col - tail_col) == 1)
+    tail_col <<- tail_col + 1L
+  else
+    tail_col <<- tail_col - 1L
+}
+
+f_move_tail_row <- function() {
+  if (sign(head_row - tail_row) == 1)
+    tail_row <<- tail_row + 1L
+  else
+    tail_row <<- tail_row - 1L
+}
+
+input <- readLines("advent 9.txt")
+
+instructions <- input %>%
+  as_tibble() %>%
+  transmute(
+    direction=str_sub(value, 1L, 1L),
+    times=str_sub(value, 3L) %>% as.integer()
+  ) %>%
+  rw_mutate(direction=list(rep(direction, times))) %>%
+  unnest(direction) %>%
+  select(-times)
+
+head_row <- 0L
+head_col <- 0L
+tail_row <- head_row
+tail_col <- head_col
+locations <- vector(
+  mode="list",
+  length=instructions %>% deframe() %>% length()
+)
+
+instructions %>%
+  pull(direction) %>%
+  runfunc(function(d) {
+    for (i in 1:length(d)) {
+      f_follow_instruction(d[i])
+      locations[[i]] <<- c(tail_row, tail_col)
+    }
+  })
+
+unique(locations) %>% length()
+
+```
+```{r part 2}
+
+f_follow_instruction <- function(l) {
+  f_move_head(l)
+  full_length <- length(rows)
+  for (i in 2:full_length) f_move_tail(i)
+}
+
+f_move_head <- function(l) {
+  if (l == "U") rows[1] <<- rows[1] - 1L
+  else if (l == "D") rows[1] <<- rows[1] + 1L
+  else if (l == "L") cols[1] <<- cols[1] - 1L
+  else if (l == "R") cols[1] <<- cols[1] + 1L
+}
+
+f_move_tail <- function(tail_index) {
+  leader_index <- tail_index - 1L
+  
+  if (abs(rows[leader_index] - rows[tail_index]) <= 1 & abs(cols[leader_index] - cols[tail_index]) <= 1) return()
+  
+  if (rows[leader_index] == rows[tail_index]) f_move_tail_col(tail_index) else
+  if (cols[leader_index] == cols[tail_index]) f_move_tail_row(tail_index) else 
+  {
+    rows[tail_index] <<- rows[tail_index] + as.integer(sign(rows[leader_index] - rows[tail_index]))
+    cols[tail_index] <<- cols[tail_index] + as.integer(sign(cols[leader_index] - cols[tail_index]))
+  }
+}
+
+f_move_tail_col <- function(tail_index) {
+  leader_index <- tail_index - 1L
+  
+  if (sign(cols[leader_index] - cols[tail_index]) == 1)
+    cols[tail_index] <<- cols[tail_index] + 1L
+  else
+    cols[tail_index] <<- cols[tail_index] - 1L
+}
+
+f_move_tail_row <- function(tail_index) {
+  leader_index <- tail_index - 1L
+  
+  if (sign(rows[leader_index] - rows[tail_index]) == 1)
+    rows[tail_index] <<- rows[tail_index] + 1L
+  else
+    rows[tail_index] <<- rows[tail_index] - 1L
+}
+
+input <- readLines("advent 9.txt")
+
+instructions <- input %>%
+  as_tibble() %>%
+  transmute(
+    direction=str_sub(value, 1L, 1L),
+    times=str_sub(value, 3L) %>% as.integer()
+  ) %>%
+  rw_mutate(direction=list(rep(direction, times))) %>%
+  unnest(direction) %>%
+  select(-times)
+
+rows <- rep(0L, 10L)
+cols <- rep(0L, 10L)
+locations <- vector(
+  mode="list",
+  length=instructions %>% deframe() %>% length()
+)
+
+instructions %>%
+  pull(direction) %>%
+  runfunc(function(d) {
+    for (i in 1:length(d)) {
+      f_follow_instruction(d[i])
+      locations[[i]] <<- c(rows[10], cols[10])
+    }
+  })
+
+locations %>%
+  unique() %>%
+  length()
+
+```

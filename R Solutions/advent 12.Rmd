@@ -1,0 +1,218 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+# Setup ----
+input <- readLines("advent 12.txt")
+
+f_shift_left <- function(m) {
+  rows <- nrow(m)
+  cols <- ncol(m)
+  m[1:rows, 2:cols] %>% cbind(99L)
+}
+f_shift_right <- function(m) {
+  rows <- nrow(m)
+  cols <- ncol(m)
+  matrix(99L, nrow=rows) %>% cbind(m[1:rows, 1:(cols - 1L)])
+}
+f_shift_up <- function(m) {
+  rows <- nrow(m)
+  cols <- ncol(m)
+  m[2:rows, 1:cols] %>% rbind(99L)
+}
+f_shift_down <- function(m) {
+  rows <- nrow(m)
+  cols <- ncol(m)
+  matrix(99L, ncol=cols) %>% rbind(m[1:(rows - 1L), 1:cols])
+}
+f_step_value_should_update <- function(row, col, value) {
+  if (row %in% c(0L, nrow(height_matrix) + 1L) | col %in% c(0L, ncol(height_matrix) + 1L)) return(FALSE)
+  is.na(steps[row, col]) | steps[row, col] > value + 1L
+}
+
+height_matrix <- input %>%
+  as_tibble() %>%
+  separate(
+    col=value,
+    into=as.character(0:((.) %>% pullfirst() %>% str_length())),
+    sep=""
+  ) %>%
+  mutate(`0`=row_number()) %>%
+  pivot_longer(-`0`) %>%
+  mutate(value=case_when(
+    value == "S" ~ "a",
+    value == "E" ~ "z",
+    TRUE ~ value
+  )) %>%
+  inner_join(
+    tibble(value=letters, height=1:26),
+    by="value"
+  ) %>%
+  select(-value) %>%
+  pivot_wider(names_from=name, values_from=height) %>%
+  select(-`0`) %>%
+  as.matrix() %>%
+  unname()
+
+dir <- matrix(".", nrow=nrow(height_matrix), ncol=ncol(height_matrix))
+rights <- ifelse(f_shift_left(height_matrix) <= height_matrix + 1, ">", dir)
+lefts <- ifelse(f_shift_right(height_matrix) <= height_matrix + 1, "<", dir)
+downs <- ifelse(f_shift_up(height_matrix) <= height_matrix + 1, "v", dir)
+ups <- ifelse(f_shift_down(height_matrix) <= height_matrix + 1, "^", dir)
+
+input %>%
+  as_tibble() %>%
+  separate(
+    col=value,
+    into=as.character(0:((.) %>% pullfirst() %>% str_length())),
+    sep=""
+  ) %>%
+  mutate(`0`=row_number()) %>%
+  rename(row="0") %>%
+  pivot_longer(-row, names_to="col") %>%
+  runfunc(function(d) {
+    start_row <<- d %>% filter(value == "S") %>% pull(row)
+    start_col <<- d %>% filter(value == "S") %>% pull(col) %>% as.integer()
+    end_row <<- d %>% filter(value == "E") %>% pull(row)
+    end_col <<- d %>% filter(value == "E") %>% pull(col) %>% as.integer()
+  })
+
+# Part 1 ----
+current_row <- start_row
+current_col <- start_col
+steps_taken <- 0L
+steps <- matrix(NA_integer_, nrow=nrow(height_matrix), ncol=ncol(height_matrix))
+steps[start_row, start_col] <- 0L
+
+while (is.na(steps[end_row, end_col])) {
+  for (row in 1:nrow(height_matrix)) {
+    for (col in 1:ncol(height_matrix)) {
+      if (is.na(steps[row, col])) next
+      value <- steps[row, col]
+      if (rights[row, col] == ">" & f_step_value_should_update(row, col + 1L, value)) steps[row, col + 1L] <- value + 1L
+      if (lefts[row, col] == "<" & f_step_value_should_update(row, col - 1L, value)) steps[row, col - 1L] <- value + 1L
+      if (downs[row, col] == "v" & f_step_value_should_update(row + 1L, col, value)) steps[row + 1L, col] <- value + 1L
+      if (ups[row, col] == "^" & f_step_value_should_update(row - 1L, col, value)) steps[row - 1L, col] <- value + 1L
+    }
+  }
+}
+
+steps[end_row, end_col]
+
+# Test impossible (1, 15) ----
+start_row <- 1L
+start_col <- 15L
+
+current_row <- start_row
+current_col <- start_col
+steps_taken <- 0L
+steps <- matrix(NA_integer_, nrow=nrow(height_matrix), ncol=ncol(height_matrix))
+steps[start_row, start_col] <- 0L
+
+something_updated <- TRUE
+while (is.na(steps[end_row, end_col]) & something_updated) {
+  something_updated <- FALSE
+  for (row in 1:nrow(height_matrix)) {
+    for (col in 1:ncol(height_matrix)) {
+      if (is.na(steps[row, col])) next
+      value <- steps[row, col]
+      if (rights[row, col] == ">" & f_step_value_should_update(row, col + 1L, value)) {
+        steps[row, col + 1L] <- value + 1L
+        something_updated <- TRUE
+      }
+      if (lefts[row, col] == "<" & f_step_value_should_update(row, col - 1L, value)) {
+        steps[row, col - 1L] <- value + 1L
+        something_updated <- TRUE
+      }
+      if (downs[row, col] == "v" & f_step_value_should_update(row + 1L, col, value)) {
+        steps[row + 1L, col] <- value + 1L
+        something_updated <- TRUE
+      }
+      if (ups[row, col] == "^" & f_step_value_should_update(row - 1L, col, value)) {
+        steps[row - 1L, col] <- value + 1L
+        something_updated <- TRUE
+      }
+    }
+  }
+}
+
+steps[end_row, end_col]
+
+# Part 2 ----
+
+a_heights <- height_matrix %>%
+  as_tibble() %>%
+  mutate(row=row_number()) %>%
+  pivot_longer(-row, names_to="col") %>%
+  mutate(col=str_remove(col, "V") %>% as.integer()) %>%
+  filter(value == 1L) %>%
+  select(row, col)
+
+a_height_dists <- a_heights %>%
+  mutate(
+    num=row_number(),
+    distance=pmap_int(list(row, col, num), function(start_row, start_col, num) {
+      current_row <<- start_row
+      current_col <<- start_col
+      steps_taken <<- 0L
+      steps <<- matrix(NA_integer_, nrow=nrow(height_matrix), ncol=ncol(height_matrix))
+      steps[start_row, start_col] <<- 0L
+      
+      something_updated <- TRUE
+      while (is.na(steps[end_row, end_col]) & something_updated) {
+        something_updated <- FALSE
+        for (row in 1:nrow(height_matrix)) {
+          for (col in 1:ncol(height_matrix)) {
+            if (is.na(steps[row, col])) next
+            value <- steps[row, col]
+            if (rights[row, col] == ">" & f_step_value_should_update(row, col + 1L, value)) {
+              steps[row, col + 1L] <<- value + 1L
+              something_updated <- TRUE
+            }
+            if (lefts[row, col] == "<" & f_step_value_should_update(row, col - 1L, value)) {
+              steps[row, col - 1L] <<- value + 1L
+              something_updated <- TRUE
+            }
+            if (downs[row, col] == "v" & f_step_value_should_update(row + 1L, col, value)) {
+              steps[row + 1L, col] <<- value + 1L
+              something_updated <- TRUE
+            }
+            if (ups[row, col] == "^" & f_step_value_should_update(row - 1L, col, value)) {
+              steps[row - 1L, col] <<- value + 1L
+              something_updated <- TRUE
+            }
+          }
+        }
+      }
+      
+      print(num)
+      
+      steps[end_row, end_col]
+    })
+  )
+
+a_height_dists %>%
+  filter(!is.na(distance)) %>%
+  pull(distance) %>%
+  min()
+
+```

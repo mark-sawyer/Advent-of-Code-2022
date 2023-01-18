@@ -1,0 +1,486 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("C:/Documents/R Files/Advent of Code")
+source("C:/Documents/R Files/Setup.R")
+
+```
+
+```{r}
+
+# Setup ----
+{
+  input_type <- "advent"
+  input <- readLines(str_c("Inputs/", input_type, " 22.txt"))
+  
+  # instructions ----
+  instructions <- input %>%
+    as_tibble() %>%
+    mutate(
+      test=value == "",
+      cumsum=cumsum(test)
+    ) %>%
+    filter(cumsum == 1L) %>%
+    filter(row_number() > 1L) %>%
+    pull(value) %>%
+    runfunc(function(d) {
+      distance <- integer()
+      turns <- character()
+      
+      current_num <- ""
+      for (i in 1:str_length(d)) {
+        char <- str_sub(d, i, i)
+        if (char %in% c("L", "R")) {
+          distance <- c(distance, as.integer(current_num))
+          turns <- c(turns, char)
+          current_num <- ""
+        }
+        else if (i == str_length(d)) {
+          current_num <- str_c(current_num, char)
+          distance <- c(distance, as.integer(current_num))
+          turns <- c(turns, NA_character_)
+        }
+        else current_num <- str_c(current_num, char)
+      }
+      
+      tibble(distance, turns)
+    }) %>%
+    mutate(rn=row_number())
+  
+  # board ----
+  board <- input %>%
+    as_tibble() %>%
+    mutate(
+      test=value == "",
+      cumsum=cumsum(test)
+    ) %>%
+    filter(cumsum == 0L) %>%
+    select(value) %>%
+    mutate(
+      len=str_length(value),
+      value=str_pad(value, max(len), "right")
+    ) %>%
+    separate(
+      value,
+      into=as.character(0:((.) %>% pull(len) %>% max())),
+      sep=""
+    ) %>%
+    select(-c(`0`, len)) %>%
+    as.matrix()
+  
+  # cube ----
+  if (input_type == "simple") {
+    cube <- board %>%
+      runfunc(function(board) {
+        length <- ncol(board) / 4
+        cube <- vector(mode="list", length=6L)
+        
+        index <- 1L
+        for (i in 1:12) {
+          if (i %in% c(1, 2, 4, 8, 9, 10)) next
+          
+          big_row <- ceiling(i / 4)
+          big_col <- ((i - 1) %% 4) + 1
+          rows <- (length*(big_row - 1) + 1):(length*big_row)
+          cols <- (length*(big_col - 1) + 1):(length*big_col)
+          
+          face <- board[rows, cols]
+          cube[[index]] <- face
+          index <- index + 1L
+        }
+        
+        cube
+    })
+  }
+  else if (input_type == "advent") {
+    cube <- board %>%
+      runfunc(function(board) {
+        length <- ncol(board) / 3
+        cube <- vector(mode="list", length=6L)
+        
+        index <- 1L
+        for (i in 1:12) {
+          if (i %in% c(1, 4, 6, 9, 11, 12)) next
+          
+          big_row <- ceiling(i / 3)
+          big_col <- ((i - 1) %% 3) + 1
+          rows <- (length*(big_row - 1) + 1):(length*big_row)
+          cols <- (length*(big_col - 1) + 1):(length*big_col)
+          
+          face <- board[rows, cols]
+          cube[[index]] <- face
+          index <- index + 1L
+        }
+        
+        cube
+    })
+  }
+  
+  # Initial position ----
+  current_row <- 1L
+  # current_col <- which(board[current_row,] != " ") %>% min()  # For part one
+  current_col <- 1L                                             # For part two
+  current_direction <- ">"
+  current_face <- 1L
+  face_length <- nrow(cube[[1]])
+  
+  # rotation_table ----
+  rotation_table <- tibble(new=factor(c("^", ">", "v", "<"), levels=c("^", ">", "v", "<"))) %>%
+    crossing(old=factor(c("^", ">", "v", "<"), levels=c("^", ">", "v", "<"))) %>%
+    mutate(pos_function=list(
+      function(current_row, current_col) { c(face_length, current_col) },
+      function(current_row, current_col) { c(face_length, current_row) },
+      function(current_row, current_col) { c(face_length, flip_number(current_col)) },
+      function(current_row, current_col) { c(face_length, flip_number(current_row)) },
+      
+      function(current_row, current_col) { c(current_col, 1L) },
+      function(current_row, current_col) { c(current_row, 1L) },
+      function(current_row, current_col) { c(flip_number(current_col), 1L) },
+      function(current_row, current_col) { c(flip_number(current_row), 1L) },
+      
+      function(current_row, current_col) { c(1L, flip_number(current_col)) },
+      function(current_row, current_col) { c(1L, flip_number(current_row)) },
+      function(current_row, current_col) { c(1L, current_col) },
+      function(current_row, current_col) { c(1L, current_row) },
+      
+      function(current_row, current_col) { c(flip_number(current_col), face_length) },
+      function(current_row, current_col) { c(flip_number(current_row), face_length) },
+      function(current_row, current_col) { c(current_col, face_length) },
+      function(current_row, current_col) { c(current_row, face_length) }
+    ))
+  
+  # face_connections ----
+  if (input_type == "simple") {
+    face_connections <- tibble(face_num=1:6) %>%
+      crossing(direction=factor(c(">", "v", "<", "^"), levels=c(">", "v", "<", "^"))) %>%
+      mutate(
+        new_face=c(
+          "6", "4", "3", "2",
+          "3", "5", "6", "1",
+          "4", "5", "2", "1",
+          "6", "5", "3", "1",
+          "6", "2", "3", "4",
+          "1", "2", "5", "4"
+        ) %>% as.integer(),
+        new_direction=c(
+          "<", "v", "v", "v",
+          ">", "^", "^", "v",
+          ">", ">", "<", ">",
+          "v", "v", "<", "^",
+          ">", "^", "^", "^",
+          "<", ">", "<", "<"
+        )
+      )
+  }
+  else {
+    face_connections <- tibble(face_num=1:6) %>%
+      crossing(direction=factor(c(">", "v", "<", "^"), levels=c(">", "v", "<", "^"))) %>%
+      mutate(
+        new_face=c(
+          2, 3, 4, 6,
+          5, 3, 1, 6,
+          2, 5, 4, 1,
+          5, 6, 1, 3,
+          2, 6, 4, 3,
+          5, 2, 1, 4
+        ) %>% as.integer(),
+        new_direction=c(
+          ">", "v", ">", ">",
+          "<", "<", "<", "^",
+          "^", "v", "v", "^",
+          ">", "v", ">", ">",
+          "<", "<", "<", "^",
+          "^", "v", "v", "^"
+        )
+      )
+  }
+}
+
+# Functions ----
+{
+  facing_num <- function() {
+    if (current_direction == ">") 0L
+    else if (current_direction == "v") 1L
+    else if (current_direction == "<") 2L
+    else if (current_direction == "^") 3L
+  }
+  
+  flip_number <- function(num) {
+    (nrow(cube[[1]]):1)[num]
+  }
+  
+  rotate <- function() {
+    temp <- face_connections %>%
+      filter(
+        face_num == current_face,
+        direction == current_direction
+      )
+    
+    new_face <- temp %>% pull(new_face)
+    new_direction <- temp %>% pull(new_direction)
+    new_coords <- rotation_table %>%
+      filter(
+        new == new_direction,
+        old == current_direction
+      ) %>%
+      mutate(new_coords=map(pos_function, ~ .x(current_row, current_col))) %>%
+      pullfirst(new_coords)
+    
+    list(
+      face=new_face,
+      what_there=cube[[new_face]][new_coords[1], new_coords[2]] %>% unname(),
+      coords=new_coords,
+      direction=new_direction
+    )
+  }
+  
+  # Turning ----
+  turn <- function(dir) {
+    if (is.na(dir)) return()
+    else if (dir == "R") turn_right()
+    else if (dir == "L") turn_left()
+  }
+  
+  turn_right <- function() {
+    if (current_direction == ">")
+      current_direction <<- "v"
+    else if (current_direction == "v")
+      current_direction <<- "<"
+    else if (current_direction == "<")
+      current_direction <<- "^"
+    else if (current_direction == "^")
+      current_direction <<- ">"
+  }
+  
+  turn_left <- function() {
+    if (current_direction == ">")
+      current_direction <<- "^"
+    else if (current_direction == "^")
+      current_direction <<- "<"
+    else if (current_direction == "<")
+      current_direction <<- "v"
+    else if (current_direction == "v")
+      current_direction <<- ">"
+  }
+  
+  # Moving ----
+  move <- function(distance) {
+    if (current_direction == ">")
+      move_loop(distance, right_pos)
+    else if (current_direction == "v")
+      move_loop(distance, down_pos)
+    else if (current_direction == "<")
+      move_loop(distance, left_pos)
+    else if (current_direction == "^")
+      move_loop(distance, up_pos)
+  }
+  
+  move_loop <- function(distance, pos_func) {
+    for (i in 1:distance) {
+      next_pos <- pos_func()
+      if (next_pos[[1]] == "#") break
+      else {
+        current_row <<- next_pos[[2]][1]
+        current_col <<- next_pos[[2]][2]
+      }
+    }
+  }
+  
+  move_loop2 <- function(distance) {
+    for (i in 1:distance) {
+      next_pos <- get_pos_func()()
+      if (next_pos[["what_there"]] == "#") break
+      else {
+        current_face <<- next_pos[["face"]]
+        current_row <<- next_pos[["coords"]][1]
+        current_col <<- next_pos[["coords"]][2]
+        current_direction <<- next_pos[["direction"]]
+      }
+    }
+  }
+  
+  get_pos_func <- function() {
+    if (current_direction == ">") right_pos2
+    else if (current_direction == "v") down_pos2
+    else if (current_direction == "<") left_pos2
+    else if (current_direction == "^") up_pos2
+  }
+  
+  # Position getters ----
+  right_pos <- function() {
+    if (current_col + 1L > ncol(board)) {
+      new_col <- which(board[current_row,] != " ") %>% min()
+      list(
+        board[current_row, new_col],
+        c(current_row, new_col)
+      )
+    }
+    else if (board[current_row, current_col + 1L] != " ") {
+      list(
+        board[current_row, current_col + 1L],
+        c(current_row, current_col + 1L)
+      )
+    }
+    else {
+      new_col <- which(board[current_row,] != " ") %>% min()
+      list(
+        board[current_row, new_col],
+        c(current_row, new_col)
+      )
+    }
+  }
+  
+  down_pos <- function() {
+    if (current_row + 1L > nrow(board)) {
+      new_row <- which(board[, current_col] != " ") %>% min()
+      list(
+        board[new_row, current_col],
+        c(new_row, current_col)
+      )
+    }
+    else if (board[current_row + 1L, current_col] != " ") {
+      list(
+        board[current_row + 1L, current_col],
+        c(current_row + 1L, current_col)
+      )
+    }
+    else {
+      new_row <- which(board[, current_col] != " ") %>% min()
+      list(
+        board[new_row, current_col],
+        c(new_row, current_col)
+      )
+    }
+  }
+  
+  left_pos <- function() {
+    if (current_col - 1L < 1L) {
+      new_col <- which(board[current_row,] != " ") %>% max()
+      list(
+        board[current_row, new_col],
+        c(current_row, new_col)
+      )
+    }
+    else if (board[current_row, current_col - 1L] != " ") {
+      list(
+        board[current_row, current_col - 1L],
+        c(current_row, current_col - 1L)
+      )
+    }
+    else {
+      new_col <- which(board[current_row,] != " ") %>% max()
+      list(
+        board[current_row, new_col],
+        c(current_row, new_col)
+      )
+    }
+  }
+  
+  up_pos <- function() {
+    if (current_row - 1L < 1L) {
+      new_row <- which(board[, current_col] != " ") %>% max()
+      list(
+        board[new_row, current_col],
+        c(new_row, current_col)
+      )
+    }
+    else if (board[current_row - 1L, current_col] != " ") {
+      list(
+        board[current_row - 1L, current_col],
+        c(current_row - 1L, current_col)
+      )
+    }
+    else {
+      new_row <- which(board[, current_col] != " ") %>% max()
+      list(
+        board[new_row, current_col],
+        c(new_row, current_col)
+      )
+    }
+  }
+  
+  # Position getters 2 ----
+  right_pos2 <- function() {
+    if (current_col + 1L > face_length) rotate()
+    else {
+      list(
+        face=current_face,
+        what_there=cube[[current_face]][current_row, current_col + 1L] %>% unname(),
+        coords=c(current_row, current_col + 1L),
+        direction=">"
+      )
+    }
+  }
+  
+  down_pos2 <- function() {
+    if (current_row + 1L > face_length) rotate()
+    else {
+      list(
+        face=current_face,
+        what_there=cube[[current_face]][current_row + 1L, current_col] %>% unname(),
+        coords=c(current_row + 1L, current_col),
+        direction="v"
+      )
+    }
+  }
+  
+  left_pos2 <- function() {
+    if (current_col - 1L < 1L) rotate()
+    else {
+      list(
+        face=current_face,
+        what_there=cube[[current_face]][current_row, current_col - 1L] %>% unname(),
+        coords=c(current_row, current_col - 1L),
+        direction="<"
+      )
+    }
+  }
+  
+  up_pos2 <- function() {
+    if (current_row - 1L < 1L) rotate()
+    else {
+      list(
+        face=current_face,
+        what_there=cube[[current_face]][current_row - 1L, current_col] %>% unname(),
+        coords=c(current_row - 1L, current_col),
+        direction="^"
+      )
+    }
+  }
+}
+
+# Part one ----
+for (i in 1:nrow(instructions)) {
+  instructions %>%
+    filter(rn == i) %>%
+    runfunc(function(d) {
+      move(d %>% pull(distance))
+      turn(d %>% pull(turns))
+    })
+}
+
+1000*current_row + 4*current_col + facing_num()
+
+# Part two ----
+for (i in 1:nrow(instructions)) {
+  instructions %>%
+    filter(rn == i) %>%
+    runfunc(function(d) {
+      move_loop2(d %>% pull(distance))
+      turn(d %>% pull(turns))
+    })
+}
+
+1000*current_row + 4*(current_col + (2*face_length)) + facing_num()
+
+face_length
+
+```
+
+

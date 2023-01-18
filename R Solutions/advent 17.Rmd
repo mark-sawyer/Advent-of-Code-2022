@@ -1,0 +1,435 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("C:/Documents/R Files/Advent of Code")
+source("C:/Documents/R Files/Setup.R")
+
+```
+
+```{r}
+
+# Functions ----
+get_new_rock_row <- function() {
+  has_rocks <- TRUE
+  row_being_checked <- rows
+  
+  while (has_rocks) {
+    has_rocks <- mean(field[row_being_checked,] == 0L) != 1
+    row_being_checked <- row_being_checked - 1L
+  }
+  
+  row_being_checked - 2L
+}
+
+get_rock_type <- function(rock_number) {
+  rock_type_number <- rock_number %% 5L
+  
+  if (rock_type_number == 0L) {
+    matrix(c(0L, 0L, 1L, 1L, 1L, 1L, 0L), nrow=1L)
+  }
+  else if (rock_type_number == 1L) {
+    matrix(c(
+      0L, 0L, 0L, 1L, 0L, 0L, 0L,
+      0L, 0L, 1L, 1L, 1L, 0L, 0L, 
+      0L, 0L, 0L, 1L, 0L, 0L, 0L
+    ), nrow=3L, byrow=TRUE)
+  }
+  else if (rock_type_number == 2L) {
+    matrix(c(
+      0L, 0L, 0L, 0L, 1L, 0L, 0L,
+      0L, 0L, 0L, 0L, 1L, 0L, 0L, 
+      0L, 0L, 1L, 1L, 1L, 0L, 0L
+    ), nrow=3L, byrow=TRUE)
+  }
+  else if (rock_type_number == 3L) {
+    matrix(c(
+      0L, 0L, 1L, 0L, 0L, 0L, 0L,
+      0L, 0L, 1L, 0L, 0L, 0L, 0L,
+      0L, 0L, 1L, 0L, 0L, 0L, 0L,
+      0L, 0L, 1L, 0L, 0L, 0L, 0L
+    ), nrow=4L, byrow=TRUE)
+  }
+  else if (rock_type_number == 4L) {
+    matrix(c(
+      0L, 0L, 1L, 1L, 0L, 0L, 0L, 
+      0L, 0L, 1L, 1L, 0L, 0L, 0L
+    ), nrow=2L, byrow=TRUE)
+  }
+}
+
+get_right_shift <- function(rock_number) {
+  rock_type_number <- rock_number %% 5L
+  
+  if (rock_type_number == 0L) {
+    matrix(c(-1L, 0L, 0L, 0L, 1L), nrow=1L)
+  }
+  else if (rock_type_number == 1L) {
+    matrix(c(
+      0L, -1L, 1L, 0L,
+      -1L, 0L, 0L, 1L,
+      0L, -1L, 1L, 0L
+    ), nrow=3L, byrow=TRUE)
+  }
+  else if (rock_type_number == 2L) {
+    matrix(c(
+      0L, 0L, -1L, 1L,
+      0L, 0L, -1L, 1L, 
+      -1L, 0L, 0L, 1L
+    ), nrow=3L, byrow=TRUE)
+  }
+  else if (rock_type_number == 3L) {
+    matrix(c(
+      -1L, 1L,
+      -1L, 1L,
+      -1L, 1L,
+      -1L, 1L
+    ), nrow=4L, byrow=TRUE)
+  }
+  else if (rock_type_number == 4L) {
+    matrix(c(
+      -1L, 0L, 1L,
+      -1L, 0L, 1L
+    ), nrow=2L, byrow=TRUE)
+  }
+}
+
+get_left_shift <- function(rock_number) {
+  get_right_shift(rock_number) * -1L
+}
+
+get_down_shift <- function(rock_number) {
+  rock_type_number <- rock_number %% 5L
+  
+  if (rock_type_number == 0L) {
+    matrix(c(
+      -1L, -1L, -1L, -1L,
+      1L, 1L, 1L, 1L
+    ), nrow=2L, byrow=TRUE)
+  }
+  else if (rock_type_number == 1L) {
+    matrix(c(
+      0L, -1L, 0L,
+      -1L, 0L, -1L,
+      1L, 0L, 1L,
+      0L, 1L, 0L
+    ), nrow=4L, byrow=TRUE)
+  }
+  else if (rock_type_number == 2L) {
+    matrix(c(
+      0L, 0L, -1L,
+      0L, 0L, 0L,
+      -1L, -1L, 0L, 
+      1L, 1L, 1L
+    ), nrow=4L, byrow=TRUE)
+  }
+  else if (rock_type_number == 3L) {
+    matrix(c(
+      -1L,
+      0L,
+      0L,
+      0L,
+      1L
+    ), nrow=5L, byrow=TRUE)
+  }
+  else if (rock_type_number == 4L) {
+    matrix(c(
+      -1L, -1L,
+      0L, 0L,
+      1L, 1L
+    ), nrow=3L, byrow=TRUE)
+  }
+}
+
+get_rightmost_col <- function(rock_number) {
+  rock_type_number <- rock_number %% 5L
+  
+  if (rock_type_number == 0L) 6L
+  else if (rock_type_number %in% 1:2) 5L
+  else rock_type_number
+}
+
+get_leftmost_col <- function(rock_number) {
+  3L
+}
+
+get_direction_to_use <- function() {
+  index <- (directions_used %% number_of_directions) + 1L
+  directions_used <<- directions_used + 1L
+  str_sub(input, index, index)
+}
+
+spawn_rock <- function() {
+  new_rock <- get_rock_type(rocks_fallen)
+  rightmost_col <<- get_rightmost_col(rocks_fallen)
+  leftmost_col <<- get_leftmost_col(rocks_fallen)
+  rows_to_insert_rock <- seq(get_new_rock_row(), length=nrow(new_rock), by=-1L) %>% rev()
+  current_rows <<- rows_to_insert_rock
+  field[rows_to_insert_rock,] <<- new_rock
+}
+
+jet_rock <- function(direction) {
+  if (direction == ">" & rightmost_col < field_width) {
+    temp <- matrix(0L, nrow=length(current_rows), ncol=field_width)
+    temp[, c(leftmost_col:rightmost_col, rightmost_col + 1L)] <- get_right_shift(rocks_fallen)
+    temp <- field[current_rows,] + temp
+    if (mean(temp == 8L) == 0) {
+      field[current_rows,] <<- temp
+      rightmost_col <<- rightmost_col + 1L
+      leftmost_col <<- leftmost_col + 1L
+    }
+  }
+  else if (direction == "<" & leftmost_col > 1L) {
+    temp <- matrix(0L, nrow=length(current_rows), ncol=field_width)
+    temp[, c(leftmost_col - 1L, leftmost_col:rightmost_col)] <- get_left_shift(rocks_fallen)
+    temp <- field[current_rows,] + temp
+    if (mean(temp == 8L) == 0) {
+      field[current_rows,] <<- temp
+      rightmost_col <<- rightmost_col - 1L
+      leftmost_col <<- leftmost_col - 1L
+    }
+  }
+}
+
+fall_rock <- function() {
+  rows_inspected <- c(current_rows, max(current_rows) + 1L)
+  temp <- matrix(0L, nrow=length(current_rows) + 1L, ncol=field_width)
+  temp[, leftmost_col:rightmost_col] <- get_down_shift(rocks_fallen)
+  temp <- field[rows_inspected,] + temp
+  if (mean(temp == 8L) == 0) {
+    field[rows_inspected,] <<- temp
+    current_rows <<- current_rows + 1L
+  }
+  else {
+    field <<- ifelse(field == 1L, 7L, field)
+    rocks_fallen <<- rocks_fallen + 1L
+    rock_stopped <<- TRUE
+  }
+}
+
+fall_rock_pt2 <- function() {
+  rows_inspected <- c(current_rows, max(current_rows) + 1L)
+  temp <- matrix(0L, nrow=length(current_rows) + 1L, ncol=field_width)
+  temp[, leftmost_col:rightmost_col] <- get_down_shift(rocks_fallen)
+  temp <- field[rows_inspected,] + temp
+  if (mean(temp == 8L) == 0) {
+    field[rows_inspected,] <<- temp
+    current_rows <<- current_rows + 1L
+  }
+  else {
+    field <<- ifelse(field == 1L, 7L, field)
+    rocks_fallen <<- rocks_fallen + 1L
+    rock_stopped <<- TRUE
+    
+    heights[rocks_fallen] <<- field[1:(rows - 1L),] %>%
+      as_tibble(.names_repair == "TRUE") %>%
+      filter(!(V1 == 0L & V2 == 0L & V3 == 0L & V4 == 0L & V5 == 0L & V6 == 0L & V7 == 0L)) %>%
+      nrow()
+  }
+}
+
+# Setup ----
+input <- readLines("Inputs/advent 17.txt")
+number_of_directions <- str_length(input)
+
+# Part 1 ----
+rows <- 3500L
+field_width <- 7L
+field <- matrix(0L, nrow=rows, ncol=field_width)
+field[rows,] <- rep(7L, field_width)
+rocks_fallen <- 0L
+directions_used <- 0L
+
+rock_stopped <- TRUE
+while (rocks_fallen < 2022) {
+  if (rock_stopped) {
+    spawn_rock()
+    rock_stopped <- FALSE
+    print(rocks_fallen)
+  }
+  direction <- get_direction_to_use()
+  jet_rock(direction)
+  fall_rock()
+}
+
+field[1:(rows - 1L),] %>%
+  as_tibble(.name_repare=TRUE) %>%
+  mutate(rn=row_number() %>% rev()) %>%
+  pivot_longer(-rn) %>%
+  group_by(rn) %>%
+  summarise(zero_prop=mean(value == 0L)) %>%
+  filter(zero_prop == 1L) %>%
+  summarise(min(rn) - 1L) %>%
+  deframe()
+
+# Part 2 ----
+{
+  # Setup ----
+  rows <- 18000L
+  field_width <- 7L
+  field <- matrix(0L, nrow=rows, ncol=field_width)
+  field[rows,] <- rep(7L, field_width)
+  rocks_fallen <- 0L
+  directions_used <- 0L
+  rocks_to_fall <- 10000L
+  heights <- numeric(rocks_to_fall)
+  
+  # Fall rocks ----
+  rock_stopped <- TRUE
+  while (rocks_fallen < rocks_to_fall) {
+    if (rock_stopped) {
+      spawn_rock()
+      rock_stopped <- FALSE
+      print(rocks_fallen)
+    }
+    direction <- get_direction_to_use()
+    jet_rock(direction)
+    fall_rock_pt2()
+  }
+  
+  # Find the syncing number ----
+  tower <- field[1:(rows - 1L),] %>%
+    as_tibble(.name_repare=TRUE) %>%
+    mutate(sum=V1 + V2 + V3 + V4 + V5 + V6 + V7) %>%
+    filter(sum > 0L) %>%
+    select(-sum) %>%
+    mutate(rn=row_number() %>% rev()) %>%
+    pivot_longer(-rn, values_to="value_1")
+  
+  offsets <- 2:3000
+  matches <- numeric(length(offsets))
+  for (i in 1:length(matches)) {
+    print(i)
+    this_offset <- offsets[i]
+    matches[i] <- tower %>%
+      inner_join(
+        tower %>%
+          mutate(
+            offset=this_offset,
+            rn=rn - offset
+          ) %>%
+          rename(value_2="value_1"),
+        by=c("rn", "name")
+      ) %>%
+      mutate(match=value_1 == value_2) %>%
+      group_by(rn) %>%
+      summarise(match=mean(match)) %>%
+      filter(match == 1) %>%
+      nrow()
+  }
+  
+  syncing_number <- tibble(
+    offsets,
+    matches
+  ) %>%
+    arrange(desc(matches)) %>%
+    pullfirst(offsets)
+  
+  # What row does the pattern begin? ----
+  repetition_starts <- tower %>%
+    inner_join(
+      tower %>%
+        rename(original_rn="rn") %>%
+        mutate(
+          offset=syncing_number,
+          join_rn=original_rn - offset
+        ) %>%
+        rename(value_2="value_1"),
+      by=c("rn"="join_rn", "name")
+    ) %>%
+    mutate(match=value_1 == value_2) %>%
+    group_by(rn, original_rn) %>%
+    summarise(match=mean(match), .groups="drop") %>%
+    filter(match == 1) %>%
+    mutate(
+      rn_shift_1=c(rn[2:n()], NA_integer_),
+      rn_shift_2=c(rn[3:n()], rep(NA_integer_, 2L)),
+      rn_shift_3=c(rn[4:n()], rep(NA_integer_, 3L)),
+      rn_shift_4=c(rn[5:n()], rep(NA_integer_, 4L)),
+      rn_shift_5=c(rn[6:n()], rep(NA_integer_, 5L)),
+      is_running_seq=(rn_shift_1 == rn + 1L) & (rn_shift_2 == rn + 2L) & (rn_shift_3 == rn + 3L) & (rn_shift_4 == rn + 4L) & (rn_shift_5 == rn + 5L)
+    ) %>%
+    filter(is_running_seq) %>%
+    pullfirst(rn)
+  
+  # How many rocks fall in the pattern? ----
+  rocks_in_pattern <- tower %>%
+    arrange(rn) %>%
+    filter(rn >= repetition_starts) %>%
+    mutate(adj=(rn - repetition_starts) %>% { . %% syncing_number }) %>%
+    filter(adj == 0L) %>%
+    pivot_wider(names_from=name, values_from=value_1) %>%
+    inner_join(
+      tibble(
+        rocks_fallen=1:length(heights),
+        heights
+      ),
+      by=c("rn"="heights")
+    ) %>%
+    mutate(
+      shift=c(rocks_fallen[2:n()], NA_integer_),
+      difference=shift - rocks_fallen
+    ) %>%
+    filter(!is.na(difference)) %>%
+    distinct(difference) %>%
+    deframe()
+  
+  # How many rocks fall before the pattern? ----
+  rocks_before_pattern <- tower %>%
+    filter(rn <= repetition_starts - 1L) %>%
+    pivot_wider(names_from=name, values_from=value_1) %>%
+    inner_join(
+      tibble(
+        rocks_fallen=1:length(heights),
+        heights
+      ),
+      by=c("rn"="heights")
+    ) %>%
+    filter(rn == max(rn)) %>%
+    summarise(rocks_fallen=max(rocks_fallen)) %>%
+    deframe()
+    
+  # After 1000000000000 rocks, how far through the pattern will we be? ----
+  needed_stats <- tibble(
+    big_num=1000000000000,
+    rocks_before_pattern,
+    diff=big_num - rocks_before_pattern,
+    fitting=floor(diff / rocks_in_pattern),
+    remainder=(diff / rocks_in_pattern) %>%
+      { . %% 1 } %>%
+      { . * rocks_in_pattern } %>%
+      round() %>%
+      as.integer()
+  )
+  
+  extra_height <- tower %>%
+    arrange(rn) %>%
+    pivot_wider(names_from=name, values_from=value_1) %>%
+    filter(rn >= repetition_starts) %>%
+    inner_join(
+      tibble(
+        rocks_fallen=1:length(heights),
+        heights
+      ),
+      by=c("rn"="heights")
+    ) %>%
+    mutate(
+      number_in_pattern=rocks_fallen - min(rocks_fallen) + 1L,
+      extra_height=rn - (repetition_starts - 1L)
+    ) %>%
+    filter(number_in_pattern == needed_stats$remainder) %>%
+    pullfirst(extra_height)
+  
+  needed_stats %>%
+    mutate(final=(fitting * syncing_number) + (repetition_starts - 1L) + extra_height)
+  
+  
+  
+}
+  
+```

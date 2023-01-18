@@ -1,0 +1,89 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+input <- readLines("advent 10.txt")
+
+simple <- readLines("advent 10 simple.txt")
+
+
+input %>%
+  as_tibble() %>%
+  mutate(cycles=if_else(value == "noop", 1L, 2L)) %>%
+  rw_mutate(
+    cycle=list(rep(1, cycles)),
+    action=list(runfunc(function() {
+      if (value == "noop") "nothing"
+      else c("nothing", "do")
+    }))
+  ) %>%
+  unnest(c(cycle, action)) %>%
+  mutate(
+    cycle=cumsum(cycle),
+    to_add=if_else(action == "nothing", 0L, str_sub(value, 6L) %>% as.integer()),
+    X=c(1, (1 + cumsum(to_add))[1:(n() - 1L)]),
+    strength=cycle * X
+  ) %>%
+  select(-cycles) %>%
+  filter(cycle %in% seq(20, by=40, length=6)) %>%
+  summarise(sum(strength))
+
+x <- input %>%
+  as_tibble() %>%
+  mutate(cycles=if_else(value == "noop", 1L, 2L)) %>%
+  rw_mutate(
+    cycle=list(rep(1, cycles)),
+    action=list(runfunc(function() {
+      if (value == "noop") "nothing"
+      else c("nothing", "do")
+    }))
+  ) %>%
+  unnest(c(cycle, action)) %>%
+  mutate(
+    cycle=cumsum(cycle),
+    row=ceiling(cycle / 40),
+    col=(cycle %% 40L) %>% { if_else(. == 0L, 40, .) },
+    to_add=if_else(action == "nothing", 0L, str_sub(value, 6L) %>% as.integer()),
+    left=c(1, (1 + cumsum(to_add))[1:(n() - 1L)]) %>% as.integer(),
+    mid=left + 1L,
+    right=left + 2L
+  ) %>%
+  rw_mutate(lit=col %in% c(left, mid, right)) %>%
+  select(
+    value, cycle, action, to_add,
+    row, col,
+    left, mid, right,
+    lit
+  )
+
+mat <- matrix("", ncol=40, nrow=6)
+
+x %>%
+  select(row, col, lit) %>%
+  mutate(pmap(list(row, col, lit), function(row, col, lit) {
+    mat[row, col] <<- if_else(lit, "#", ".")
+    1
+  }))
+
+mat
+
+```

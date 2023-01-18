@@ -1,0 +1,211 @@
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+input <- readLines("advent 15.txt")
+# y_val <- 10
+y_val <- 2000000
+
+collapse <- function(d) {
+  d %>%
+    runfunc(function(d) {
+      d %>%
+        mutate(rn=1:n()) %>%
+        crossing(
+          d %>%
+            mutate(rn2=1:n()) %>%
+            rename(
+              xmin2="xmin",
+              xmax2="xmax"
+            )
+        )
+    }) %>%
+    filter(rn != rn2) %>%
+    mutate(
+      overlap=!(xmax < xmin2) & !(xmin > xmax2),
+      encompassed=(xmin > xmin2) & (xmax < xmax2)
+    ) %>%
+    group_by(rn) %>%
+    filter(sum(encompassed) == 0L) %>%
+    ungroup() %>%
+    transmute(
+      xmin=if_else(overlap, pmin(xmin, xmin2), xmin),
+      xmax=if_else(overlap, pmax(xmax, xmax2), xmax)
+    ) %>%
+    distinct() %>%
+    group_by(xmin) %>%
+    summarise(xmax=max(xmax)) %>%
+    group_by(xmax) %>%
+    summarise(xmin=min(xmin))
+}
+
+clean <- input %>%
+  as_tibble() %>%
+  mutate(
+    value=str_remove(value, "Sensor at ") %>%
+      str_replace(": closest beacon is at ", ", ")
+  ) %>%
+  separate(value, into=c("Sx", "Sy", "Bx", "By"), sep=", ") %>%
+  mutate(
+    across(everything(), ~ str_remove(.x, "(x=)|(y=)") %>% as.integer()),
+    distance=abs(Bx - Sx) + abs(By - Sy)
+  )
+
+# Part 1 ----
+
+clean %>%
+  mutate(distance_to_yline=abs(Sy - y_val)) %>%
+  filter(distance_to_yline <= distance) %>%
+  mutate(
+    extra_each_side=distance - distance_to_yline,
+    xmin=Sx - extra_each_side,
+    xmax=Sx + extra_each_side
+  ) %>%
+  select(xmin, xmax) %>%
+  runfunc(function(d) {
+    stop <- FALSE
+    
+    while(!stop) {
+      before_rows <- nrow(d)
+      temp <- d %>% collapse()
+      after_rows <- nrow(temp)
+      if ((after_rows == before_rows) | after_rows == 1L) stop <- TRUE
+      else d <- temp
+    }
+    
+    temp
+  }) %>%
+  mutate(distance=xmax - xmin + 1L)
+
+# Part 2 ----
+
+combos <- tibble(x=1:nrow(clean)) %>%
+  runfunc(function(d) {
+    d %>%
+      crossing(d %>% rename(y="x")) %>%
+      crossing(d %>% rename(z="x")) %>%
+      crossing(d %>% rename(w="x"))
+  }) %>%
+  rw_mutate(distincts=n_distinct(c(x, y, z, w))) %>%
+  filter(
+    distincts == 4L,
+    (x < y) & (x < z) & (x < w) &
+      (y < z) & (y < w) &
+      (z < w)
+  ) %>%
+  select(-distincts)
+
+x1 <- combos %>%
+  inner_join(
+    clean %>% select(Xx="Sx", Xy="Sy", Xdist="distance") %>% mutate(rn=1:n()),
+    by=c("x"="rn")
+  ) %>%
+  inner_join(
+    clean %>% select(Yx="Sx", Yy="Sy", Ydist="distance") %>% mutate(rn=1:n()),
+    by=c("y"="rn")
+  ) %>%
+  inner_join(
+    clean %>% select(Zx="Sx", Zy="Sy", Zdist="distance") %>% mutate(rn=1:n()),
+    by=c("z"="rn")
+  ) %>%
+  inner_join(
+    clean %>% select(Wx="Sx", Wy="Sy", Wdist="distance") %>% mutate(rn=1:n()),
+    by=c("w"="rn")
+  ) %>%
+  select(-(x:w)) %>%
+  mutate(rn=1:n()) %>%
+  pivot_longer(-rn) %>%
+  mutate(
+    letter=str_sub(name, 1L, 1L),
+    name=str_sub(name, 2L)
+  ) %>%
+  pivot_wider(names_from=name, values_from=value) %>%
+  nest_by(rn) %>%
+  mutate(
+    data=map(data, function(d) {
+      d %>%
+        arrange(desc(y)) %>%
+        mutate(top_y=c(T, T, F, F)) %>%
+        arrange(desc(x)) %>%
+        mutate(top_x=c(T, T, F, F))
+    }),
+    distincts=map_int(data, function(d) {
+      d %>%
+        summarise(distincts=n_distinct(top_y, top_x)) %>%
+        deframe()
+    })
+  ) %>%
+  filter(distincts == 4L)
+
+x2 <- x1 %>%
+  mutate(
+    test=map2_lgl(data, rn, function(d, rn) {
+      print(rn)
+      d %>%
+        mutate(type=case_when(
+          top_x & top_y ~ "top_right",
+          !top_x & !top_y ~ "bottom_left",
+          top_x & !top_y ~ "top_left",
+          !top_x & top_y ~ "bottom_right"
+        )) %>%
+        select(type, dist, x, y) %>%
+        pivot_wider(names_from=type, values_from=c(dist, x, y)) %>%
+        transmute(
+          pos_dist=abs(x_top_right - x_bottom_left) + abs(y_top_right - y_bottom_left),
+          neg_dist=abs(x_top_left - x_bottom_right) + abs(y_top_left - y_bottom_right),
+          test1=pos_dist == dist_top_right + dist_bottom_left + 2L,
+          test2=neg_dist == dist_top_left + dist_bottom_right + 2L,
+          test=test1 & test2
+        ) %>%
+        pull(test)
+    })
+  ) %>%
+  filter(test)
+
+x2 %>%
+  unnest(data) %>%
+  filter(top_y & !top_x) %>%
+  mutate(right=x + dist + 1L)
+
+# bottom (2561955, 2751495)
+# right (3173429, 3362969)
+
+tibble(
+  x=2561955:3173429,
+  y=2751495:3362969
+)
+
+
+x2 %>%
+  unnest(data) %>%
+  filter(top_y & top_x) %>%
+  mutate(
+    bottom=y - dist - 1L,
+    left=x - dist - 1L
+  )
+
+# bottom (2989899, 2653755)
+# left (2404308, 3239346)
+
+tibble(
+  x=2989899:2404308,
+  y=2653755:3239346
+) %>%
+  inner_join(
+    tibble(
+      x=2561955:3173429,
+      y=2751495:3362969
+    )
+  ) %>%
+  mutate(tuning=(x * 4000000) + y) %>%
+  pull(tuning) %>%
+  as.character()
+
+```

@@ -1,0 +1,51 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+read.table("advent 1-1.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  mutate(
+    is_na=is.na(V1),
+    elf=cumsum(is_na) + 1L
+  ) %>%
+  filter(!is_na) %>%
+  group_by(elf) %>%
+  summarise(calories=sum(V1)) %>%
+  arrange(desc(calories))
+
+
+
+read.table("advent 1-1.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  mutate(
+    is_na=is.na(V1),
+    elf=cumsum(is_na) + 1L
+  ) %>%
+  filter(!is_na) %>%
+  group_by(elf) %>%
+  summarise(calories=sum(V1)) %>%
+  arrange(desc(calories)) %>%
+  top_n(3L) %>%
+  summarise(sum(calories))
+
+```
+
+

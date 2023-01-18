@@ -1,0 +1,231 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("C:/Documents/R Files/Advent of Code")
+source("C:/Documents/R Files/Setup.R")
+
+```
+
+```{r}
+
+input <- readLines("Inputs/advent 18.txt")
+
+droplets <- input %>%
+  as_tibble() %>%
+  separate(value, into=c("x", "y", "z"), sep=",") %>%
+  mutate(across(everything(), as.integer))
+
+# Part 1 ----
+
+# A surface is shared if two of the three sides match, AND the other coordinate only has a difference of one.
+
+adjacents <- droplets %>%
+  mutate(cube1=row_number()) %>%
+  rename(x1="x", y1="y", z1="z") %>%
+  crossing((.) %>% rename(cube2="cube1", x2="x1", y2="y1", z2="z1")) %>%
+  filter(cube1 > cube2) %>%
+  mutate(
+    x_match=x1 == x2,
+    y_match=y1 == y2,
+    z_match=z1 == z2,
+    axis_matches=x_match + y_match + z_match
+  ) %>%
+  filter(axis_matches == 2L) %>%
+  mutate(
+    diff_of_other=case_when(
+      !x_match ~ abs(x1 - x2),
+      !y_match ~ abs(y1 - y2),
+      !z_match ~ abs(z1 - z2)
+    )
+  ) %>%
+  filter(diff_of_other == 1L) %>%
+  nrow()
+
+droplets %>%
+  nrow() %>%
+  { . * 6L } %>%
+  { . - (2 * adjacents) }
+
+# Part 2 ----
+{
+  # How big is the box bounding the area we're looking at? ----
+  droplets %>%
+    mutate(cube=row_number()) %>%
+    pivot_longer(-cube, names_to="axis", values_to="coord") %>%
+    group_by(axis) %>%
+    summarise(
+      min=min(coord),
+      max=max(coord)
+    ) %>%
+    mutate(cubes=max - min + 1L) %>%
+    summarise(size=prod(cubes + 2L))
+  
+  # Get adjusted coordinates and dimensions ----
+  coords_to_use <- droplets %>%
+    mutate(cube=row_number()) %>%
+    pivot_longer(-cube, names_to="axis", values_to="coord") %>%
+    inner_join(
+      droplets %>%
+        mutate(cube=row_number()) %>%
+        pivot_longer(-cube, names_to="axis", values_to="coord") %>%
+        group_by(axis) %>%
+        summarise(min=min(coord)) %>%
+        mutate(to_sum=2L - min) %>%
+        select(axis, to_sum),
+      by="axis"
+    ) %>%
+    mutate(coord=coord + to_sum) %>%
+    select(-to_sum)
+  
+  dimensions <- coords_to_use %>%
+    group_by(axis) %>%
+    summarise(max=max(coord)) %>%
+    mutate(size=max + 1L) %>%
+    pull(size)
+  
+  # Create the array (2D) ----
+  space <- array(rep("", prod(dimensions)), dim=dimensions, dimnames=list("x"=1:5, "y"=1:5))
+  coords_to_use %>%
+    filter(axis != "z") %>%
+    pivot_wider(names_from=axis, values_from=coord) %>%
+    runfunc(function(d) {
+      x <- d %>% pull(x)
+      y <- d %>% pull(y)
+      
+      map2(x, y, function(x, y) {
+        space[x, y] <<- "O"
+      })
+    })
+  
+  # 2D example ----
+  expand2D <- function(x, y) {
+    if (x > 1) {
+      adj_space <- space[x - 1L, y]
+      if (adj_space == "") space[x - 1L, y] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    if (x < dim(space)[1]) {
+      adj_space <- space[x + 1L, y]
+      if (adj_space == "") space[x + 1L, y] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    
+    if (y > 1) {
+      adj_space <- space[x, y - 1L]
+      if (adj_space == "") space[x, y - 1L] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    if (y < dim(space)[2]) {
+      adj_space <- space[x, y + 1L]
+      if (adj_space == "") space[x, y + 1L] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    
+    space[x, y] <<- "v"
+  }
+  
+  surfaces_found <- 0L
+  space[1, 1] <- "X"
+  repeat {
+    expanded_space <- FALSE
+    for (x in 1:dim(space)[1]) {
+      for (y in 1:dim(space)[2]) {
+        current_space <- space[x, y]
+        if (current_space == "X") {
+          expand2D(x, y)
+          expanded_space <- TRUE
+        }
+      }
+    }
+    if (!expanded_space) break
+  }
+  
+  surfaces_found
+  # Create the array (3D) ----
+  space <- array(
+    rep("", prod(dimensions)),
+    dim=dimensions,
+    dimnames=list(
+      "x"=1:dimensions[1],
+      "y"=1:dimensions[2],
+      "z"=1:dimensions[3]
+    )
+  )
+  coords_to_use %>%
+    pivot_wider(names_from=axis, values_from=coord) %>%
+    runfunc(function(d) {
+      x <- d %>% pull(x)
+      y <- d %>% pull(y)
+      z <- d %>% pull(z)
+      
+      pmap(list(x, y, z), function(x, y, z) {
+        space[x, y, z] <<- "O"
+      })
+    })
+  
+  # 3D ----
+  expand3D <- function(x, y, z) {
+    if (x > 1) {
+      adj_space <- space[x - 1L, y, z]
+      if (adj_space == "") space[x - 1L, y, z] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    if (x < dim(space)[1]) {
+      adj_space <- space[x + 1L, y, z]
+      if (adj_space == "") space[x + 1L, y, z] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    
+    if (y > 1) {
+      adj_space <- space[x, y - 1L, z]
+      if (adj_space == "") space[x, y - 1L, z] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    if (y < dim(space)[2]) {
+      adj_space <- space[x, y + 1L, z]
+      if (adj_space == "") space[x, y + 1L, z] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    
+    if (z > 1) {
+      adj_space <- space[x, y, z - 1L]
+      if (adj_space == "") space[x, y, z - 1L] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    if (z < dim(space)[3]) {
+      adj_space <- space[x, y, z + 1L]
+      if (adj_space == "") space[x, y, z + 1L] <<- "X"
+      else if (adj_space == "O") surfaces_found <<- surfaces_found + 1L
+    }
+    
+    space[x, y, z] <<- "v"
+  }
+  
+  surfaces_found <- 0L
+  space[1, 1, 1] <- "X"
+  repeat {
+    expanded_space <- FALSE
+    for (x in 1:dim(space)[1]) {
+      for (y in 1:dim(space)[2]) {
+        for (z in 1:dim(space)[3]) {
+          current_space <- space[x, y, z]
+          if (current_space == "X") {
+            expand3D(x, y, z)
+            expanded_space <- TRUE
+          }
+        }
+      }
+    }
+    if (!expanded_space) break
+  }
+  
+  surfaces_found
+}
+
+```

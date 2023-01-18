@@ -1,0 +1,66 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+f_common <- function(str1, str2) {
+  str_len <- str_length(str1)
+  for (i in 1:str_len) {
+    char <- str_sub(str1, i, i)
+    if (str_detect(str2, char)) break
+  }
+  return(char)
+}
+
+value_table <- tibble(letters=c(letters, LETTERS)) %>%
+  mutate(value=1:n())
+
+read.table("advent 3.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  rename(rucksack="V1") %>%
+  mutate(
+    length=str_length(rucksack),
+    comp1=str_sub(rucksack, 1, length / 2),
+    comp2=str_sub(rucksack, (length / 2) + 1)
+  ) %>%
+  rw_mutate(common=f_common(comp1, comp2)) %>%
+  inner_join(
+    value_table,
+    by=c("common"="letters")
+  ) %>%
+  summarise(sum(value))
+
+read.table("advent 3.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  rename(badge="V1") %>%
+  mutate(group=ceiling((1:n()) / 3)) %>%
+  crossing(letter=c(letters, LETTERS)) %>%
+  mutate(letter_in=str_detect(badge, letter)) %>%
+  group_by(group, letter) %>%
+  summarise(groups_with_letter=sum(letter_in), .groups="drop") %>%
+  filter(groups_with_letter == 3L) %>%
+  inner_join(
+    value_table,
+    by=c("letter"="letters")
+  ) %>%
+  summarise(sum(value))
+
+```

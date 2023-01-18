@@ -1,0 +1,98 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{v1 r}
+
+len <- readLines("advent 6.txt") %>% str_length()
+
+readLines("advent 6.txt") %>%
+  str_split(pattern="") %>%
+  unlist() %>%
+  as_tibble() %>%
+  transmute(
+    num=1:n(),
+    val1=value
+  ) %>%
+  runfunc(function(d) {
+    for (i in 2:4) {
+      d[[str_c("val", i)]] <- c(d[["val1"]][i:len], rep(NA_character_, i - 1L))
+    }
+    d
+  }) %>%
+  pivot_longer(-num) %>%
+  group_by(num) %>%
+  summarise(values=n_distinct(value)) %>%
+  filter(values == 4L) %>%
+  filter(num == min(num)) %>%
+  pull(num) %>%
+  { . + 3L }
+
+readLines("advent 6.txt") %>%
+  str_split(pattern="") %>%
+  unlist() %>%
+  as_tibble() %>%
+  transmute(
+    num=1:n(),
+    val1=value
+  ) %>%
+  runfunc(function(d) {
+    for (i in 2:14) {
+      d[[str_c("val", i)]] <- c(d[["val1"]][i:len], rep(NA_character_, i - 1L))
+    }
+    d
+  }) %>%
+  pivot_longer(-num) %>%
+  group_by(num) %>%
+  summarise(values=n_distinct(value)) %>%
+  filter(values == 14L) %>%
+  filter(num == min(num)) %>%
+  pull(num) %>%
+  { . + 13L }
+
+```
+```{v2 r}
+
+get_num <- function(group_size) {
+  readLines("advent 6.txt") %>%
+    str_split(pattern="") %>%
+    unlist() %>%
+    runfunc(function(c) {
+      len <- length(c)
+      for (i in group_size:len) {
+        sub_string <- c[(i - (group_size - 1L)):i]
+        uniques <- unique(sub_string) %>% length()
+        if (uniques == group_size) {
+          x <- i
+          break
+        }
+      }
+      x
+    })
+}
+
+get_num(4L)
+get_num(14L)
+
+```
+
+
+
+

@@ -1,0 +1,74 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+read.table("advent 2.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  transmute(
+    opponent=recode(V1, "A"="rock", "B"="paper", "C"="scissors"),
+    response=recode(V2, "X"="rock", "Y"="paper", "Z"="scissors"),
+    play_point=recode(response, "rock"=1L, "paper"=2L, "scissors"=3L),
+    outcome=case_when(
+      opponent == response ~ "draw",
+      opponent == "rock" ~ if_else(response == "paper", "win", "lose"),
+      opponent == "scissors" ~ if_else(response == "paper", "lose", "win"),
+      opponent == "paper" ~ if_else(response == "scissors", "win", "lose")
+    ),
+    outcome_point=recode(outcome, "win"=6L, "lose"=0L, "draw"=3L),
+    total=play_point + outcome_point
+  ) %>%
+  summarise(total=sum(total))
+
+f_win_against <- function(opponent) {
+  case_when(
+    opponent == "rock" ~ "paper",
+    opponent == "paper" ~ "scissors",
+    TRUE ~ "rock"
+  )
+}
+f_lose_against <- function(opponent) {
+  case_when(
+    opponent == "rock" ~ "scissors",
+    opponent == "paper" ~ "rock",
+    TRUE ~ "paper"
+  )
+}
+
+read.table("advent 2.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  transmute(
+    opponent=recode(V1, "A"="rock", "B"="paper", "C"="scissors"),
+    outcome=recode(V2, "X"="lose", "Y"="draw", "Z"="win"),
+    response=case_when(
+      outcome == "draw" ~ opponent,
+      outcome == "win" ~ f_win_against(opponent),
+      TRUE ~ f_lose_against(opponent),
+    ),
+    play_point=recode(response, "rock"=1L, "paper"=2L, "scissors"=3L),
+    outcome_point=recode(outcome, "win"=6L, "lose"=0L, "draw"=3L),
+    total=play_point + outcome_point
+  ) %>%
+  summarise(total=sum(total))
+
+```
+
+
+

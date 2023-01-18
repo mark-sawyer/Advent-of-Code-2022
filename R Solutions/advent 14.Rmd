@@ -1,0 +1,321 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+input <- readLines("advent 14.txt")
+
+f_move_sand <- function() {
+  if (cave[sand_row + 1L, sand_col] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  } else
+  if (cave[sand_row + 1L, sand_col - 1L] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col - 1L] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_col <<- sand_col - 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  } else
+  if (cave[sand_row + 1L, sand_col + 1L] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col + 1L] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_col <<- sand_col + 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  }
+}
+
+# Organise input ----
+scan_info <- input %>%
+  as_tibble() %>%
+  mutate(scan=row_number()) %>%
+  rw_mutate(coordinates=str_locate_all(value, " -> ") %>% first() %>% nrow() %>% { . + 1L }) %>%
+  mutate(separated=map2(value, coordinates, function(value, coordinates) {
+    value %>%
+      as_tibble() %>%
+      separate(value, as.character(1:coordinates), sep=" -> ") %>%
+      pivot_longer(everything(), names_to="order") %>%
+      separate(value, into=c("col", "row"), sep=",") %>%
+      mutate(across(c(col, row), as.integer))
+  })) %>%
+  select(-c(value, coordinates)) %>%
+  unnest(separated)
+
+# Create cave ----
+
+scan_info %>%
+  summarise(
+    min_col=min(col),
+    max_col=max(col),
+    min_row=min(row),
+    max_row=max(row)
+  )
+
+cave <- matrix(".", nrow=300, ncol=1000)
+
+scans <- scan_info %>%
+  pull(scan) %>%
+  max()
+
+for (i in 1:scans) {
+  scan_info %>%
+    filter(scan == i) %>%
+    runfunc(function(d) {
+      row <- d %>% pull(row)
+      col <- d %>% pull(col)
+      
+      for (i in 1:(length(row) - 1L)) {
+        col_first <- col[i]
+        row_first <- row[i]
+        col_second <- col[i + 1L]
+        row_second <- row[i + 1L]
+        
+        if (col_first == col_second) {
+          # make vertical line
+          cave[row_first:row_second, col_first] <<- "#"
+        } else
+        if (row_first == row_second) {
+          # make horizontal line
+          cave[row_first, col_first:col_second] <<- "#"
+        }
+      }
+    })
+}
+
+# Part one ----
+
+sand_origin <- 500L
+sand_row <- 1L
+sand_col <- sand_origin
+
+
+move_counter <- 0L
+while (move_counter < 200L) {
+  sand_moved <- FALSE
+  f_move_sand()
+  if (!sand_moved) {
+    sand_row <- 1L
+    sand_col <- sand_origin
+    move_counter <- 0L
+  }
+}
+
+sum(cave == "o") - 1L
+
+# Part two ----
+floor_level <- cave %>%
+  as_tibble() %>%
+  mutate(rn=row_number()) %>%
+  pivot_longer(-rn) %>%
+  group_by(rn) %>%
+  summarise(rocks=sum(value == "#")) %>%
+  filter(rocks != 0L) %>%
+  summarise(max(rn)) %>%
+  deframe() %>%
+  { . + 2L }
+
+cave[floor_level,] <- "#"
+
+# Add zero row
+cave <- matrix(".", nrow=1L, ncol=ncol(cave)) %>%
+  rbind(cave)
+
+sand_origin <- 500L
+sand_row <- 1L
+sand_col <- sand_origin
+
+stop <- FALSE
+while (!stop) {
+  sand_moved <- FALSE
+  f_move_sand()
+  if (!sand_moved) {
+    sand_row <- 1L
+    sand_col <- sand_origin
+    if (cave[1L, sand_col] != "o") cave[1L, sand_col] <- "o"
+    else stop <- TRUE
+    move_counter <- 0L
+  }
+}
+
+sum(cave == "o")
+
+cave[140:163, 485:510]
+
+```
+
+```{r animation}
+
+input <- readLines("advent 14.txt")
+
+f_move_sand <- function() {
+  if (cave[sand_row + 1L, sand_col] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  } else
+  if (cave[sand_row + 1L, sand_col - 1L] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col - 1L] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_col <<- sand_col - 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  } else
+  if (cave[sand_row + 1L, sand_col + 1L] == ".") {
+    cave[sand_row, sand_col] <<- "."
+    cave[sand_row + 1L, sand_col + 1L] <<- "o"
+    sand_row <<- sand_row + 1L
+    sand_col <<- sand_col + 1L
+    sand_moved <<- TRUE
+    move_counter <<- move_counter + 1L
+  }
+}
+
+# Organise input ----
+scan_info <- input %>%
+  as_tibble() %>%
+  mutate(scan=row_number()) %>%
+  rw_mutate(coordinates=str_locate_all(value, " -> ") %>% first() %>% nrow() %>% { . + 1L }) %>%
+  mutate(separated=map2(value, coordinates, function(value, coordinates) {
+    value %>%
+      as_tibble() %>%
+      separate(value, as.character(1:coordinates), sep=" -> ") %>%
+      pivot_longer(everything(), names_to="order") %>%
+      separate(value, into=c("col", "row"), sep=",") %>%
+      mutate(across(c(col, row), as.integer))
+  })) %>%
+  select(-c(value, coordinates)) %>%
+  unnest(separated)
+
+# Create cave ----
+
+scan_info %>%
+  summarise(
+    min_col=min(col),
+    max_col=max(col),
+    min_row=min(row),
+    max_row=max(row)
+  )
+
+cave <- matrix(".", nrow=300, ncol=1000)
+
+scans <- scan_info %>%
+  pull(scan) %>%
+  max()
+
+for (i in 1:scans) {
+  scan_info %>%
+    filter(scan == i) %>%
+    runfunc(function(d) {
+      row <- d %>% pull(row)
+      col <- d %>% pull(col)
+      
+      for (i in 1:(length(row) - 1L)) {
+        col_first <- col[i]
+        row_first <- row[i]
+        col_second <- col[i + 1L]
+        row_second <- row[i + 1L]
+        
+        if (col_first == col_second) {
+          # make vertical line
+          cave[row_first:row_second, col_first] <<- "#"
+        } else
+        if (row_first == row_second) {
+          # make horizontal line
+          cave[row_first, col_first:col_second] <<- "#"
+        }
+      }
+    })
+}
+
+# Part one ----
+
+f_plot_cave <- function() {
+  cave %>%
+    as_tibble() %>%
+    mutate(row=row_number()) %>%
+    pivot_longer(-row, names_to="col") %>%
+    mutate(col=str_remove(col, "V") %>% as.integer) %>%
+    filter(
+      col <= 570L,
+      col >= 470L,
+      row <= 180
+    ) %>%
+    ggplot(aes(col, row, fill=value)) +
+      geom_tile(show.legend=FALSE) +
+      scale_fill_manual(values=c(rgb_to_hex(112, 64, 16), "black", rgb_to_hex(249, 221, 113))) +
+      coord_fixed() +
+      scale_x_continuous(breaks=NULL) +
+      scale_y_reverse(breaks=NULL) +
+      labs(x=NULL, y=NULL) +
+      theme_minimal()
+}
+
+
+sand_origin <- 500L
+sand_row <- 1L
+sand_col <- sand_origin
+
+
+plot_count <- 1L
+move_counter <- 0L
+while (move_counter < 200L) {
+  sand_moved <- FALSE
+  f_move_sand()
+  if (!sand_moved) {
+    sand_row <- 1L
+    sand_col <- sand_origin
+    move_counter <- 0L
+    p <- f_plot_cave()
+    ggsave(
+      filename=str_c("cave_", str_pad(plot_count, 4L, "left", "0"), ".png"),
+      plot=p,
+      path="cave",
+      width=1,
+      height=1.5,
+    )
+    plot_count <- plot_count + 1L
+  }
+}
+
+
+  
+magick::image_write(
+  image=magick::image_animate(
+    magick::image_join(map(str_c("cave/cave_", str_pad(seq(1L, 1199L, by=3L), 4L, "left", "0"), ".png"), magick::image_read)),
+    fps=50
+  ),
+  path="cave/cave2.gif"
+)
+
+seq(1L, 1199L, by=3L)
+
+
+```
+

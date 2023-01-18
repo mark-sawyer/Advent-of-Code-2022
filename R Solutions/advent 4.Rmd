@@ -1,0 +1,47 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+input <- read.table("advent 4.txt", blank.lines.skip=FALSE) %>%
+  as_tibble() %>%
+  separate(V1, into=c("one", "two"), sep=",") %>%
+  separate(one, into=c("min_one", "max_one"), sep="-") %>%
+  separate(two, into=c("min_two", "max_two"), sep="-") %>%
+  mutate(across(everything(), as.integer))
+
+input %>%
+  mutate(
+    test=((min_one >= min_two) & (max_one <= max_two)) |
+      ((min_two >= min_one) & (max_two <= max_one))
+  ) %>%
+  summarise(sum(test))
+
+input %>%
+  mutate(test=!((min_one > max_two) | (max_one < min_two))) %>%
+  summarise(sum(test))
+
+```
+
+
+
+
+

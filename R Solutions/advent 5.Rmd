@@ -1,0 +1,152 @@
+---
+title: "SDA Headline Indicators"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    code_folding: hide
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+
+rm(list=ls())
+setwd("H:/Resources/Advent")
+source("H:/Resources/Scripts/Setup.R")
+
+```
+
+```{r}
+
+f_get_top <- function(stack) {
+  non_empty_indexes <- which(stack != " ")
+  stack[non_empty_indexes] %>%
+    { .[1] }
+}
+
+f_get_top_n <- function(stack, n) {
+  non_empty_indexes <- which(stack != " ")
+  stack[non_empty_indexes] %>%
+    { .[1:n] }
+}
+
+f_add_to_stack <- function(stack, new_vals) {
+  amount_to_add <- length(new_vals)
+  indexes <- which(stack == " ") %>%
+    max() %>%
+    { (. - amount_to_add + 1L):. }
+  
+  stack[indexes] <- new_vals
+  stack
+}
+
+f_remove_top <- function(stack) {
+  index <- which(stack != " ") %>%
+    min()
+  
+  stack[index] <- " "
+  stack
+}
+
+f_remove_top_n <- function(stack, n) {
+  indexes <- which(stack != " ") %>%
+    min() %>%
+    { .:(. + n - 1L) }
+  
+  stack[indexes] <- " "
+  stack
+}
+
+f_get_top_of_each_stack <- function(stacks) {
+  stacks %>%
+    as_tibble() %>%
+    summarise(across(everything(), ~ .x[.x != " "][1])) %>%
+    pivot_longer(everything()) %>%
+    pull(value) %>%
+    str_c(collapse="")
+}
+
+# Instructions ----
+instructions <- readLines("advent 5.txt") %>%
+  as_tibble() %>%
+  filter(row_number() >= 11L) %>%
+  mutate(value=str_remove_all(value, "(move )|(from )|(to )")) %>%
+  separate(value, into=c("times", "start", "end"), sep=" ") %>%
+  rw_mutate(start=list(rep(start, times))) %>%
+  unnest(start) %>%
+  select(-times)
+
+# Instructions (CrateMover 9001) ----
+instructions_9001 <- readLines("advent 5.txt") %>%
+  as_tibble() %>%
+  filter(row_number() >= 11L) %>%
+  mutate(value=str_remove_all(value, "(move )|(from )|(to )")) %>%
+  separate(value, into=c("amount", "start", "end"), sep=" ") %>%
+  mutate(across(everything(), as.integer))
+
+# Stacks ----
+stacks <- readLines("advent 5.txt") %>%
+  as_tibble() %>%
+  filter(row_number() <= 8L) %>%
+  mutate(
+    split=str_split(value, ""),
+    bottom=split[[n()]] %>% list(),
+    value=map2_chr(split, bottom, function(split, bottom) {
+      split <- case_when(
+        bottom == "[" ~ "[",
+        bottom == "]" ~ "]",
+        split == " " & bottom != " " ~ "x",
+        TRUE ~ split
+      ) %>%
+        str_c(collapse="") %>%
+        str_remove_all("\\[|\\]| ") %>%
+        str_replace_all("x", " ")
+    })
+  ) %>%
+  select(value) %>%
+  separate(value, as.character(0:9), sep="") %>%
+  select(-`0`) %>%
+  fold(function(d){
+    extras <- 50L
+    tibble(x=rep(1:9, each=extras), y=rep(1:extras, 9L)) %>%
+      mutate(z=" ") %>%
+      pivot_wider(names_from=x, values_from=z) %>%
+      select(-y) %>%
+      bind_rows(d)
+  }) %>%
+  as.list()
+
+# Run instructions ----
+moved_stacks <- stacks
+map2(
+  instructions %>% pull(start),
+  instructions %>% pull(end),
+  function(start, end) {
+    to_move <- moved_stacks[[start]] %>% f_get_top()
+    moved_stacks[[end]] <<- f_add_to_stack(moved_stacks[[end]], to_move)
+    moved_stacks[[start]] <<- f_remove_top(moved_stacks[[start]])
+  }
+)
+moved_stacks %>% f_get_top_of_each_stack()
+
+# Run instructions (CrateMover 9001) ----
+moved_stacks <- stacks
+pmap(
+  instructions_9001 %>% as.list(),
+  function(amount, start, end) {
+    to_move <- moved_stacks[[start]] %>% f_get_top_n(amount)
+    moved_stacks[[end]] <<- f_add_to_stack(moved_stacks[[end]], to_move)
+    moved_stacks[[start]] <<- f_remove_top_n(moved_stacks[[start]], amount)
+  }
+)
+moved_stacks %>% f_get_top_of_each_stack()
+
+```
+
+
+
+
+
